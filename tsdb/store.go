@@ -116,6 +116,14 @@ func (s *Store) loadIndexes() error {
 }
 
 func (s *Store) loadShards() error {
+	// struct to hold the result of opening each reader in a goroutine
+	type res struct {
+		s   *shardLocation
+		err error
+	}
+	resC := make(chan *res)
+	var n int
+
 	// loop through the current database indexes
 	for db := range s.databaseIndexes {
 		rps, err := ioutil.ReadDir(filepath.Join(s.path, db))
@@ -135,27 +143,43 @@ func (s *Store) loadShards() error {
 				return err
 			}
 			for _, sh := range shards {
-				path := filepath.Join(s.path, db, rp.Name(), sh.Name())
-				walPath := filepath.Join(s.EngineOptions.Config.WALDir, db, rp.Name(), sh.Name())
+				n++
+				go func(index *DatabaseIndex, db, rp, sh string) {
+					start := time.Now()
+					path := filepath.Join(s.path, db, rp, sh)
+					walPath := filepath.Join(s.EngineOptions.Config.WALDir, db, rp, sh)
 
-				// Shard file names are numeric shardIDs
-				shardID, err := strconv.ParseUint(sh.Name(), 10, 64)
-				if err != nil {
-					s.Logger.Printf("%s is not a valid ID. Skipping shard.", sh.Name())
-					continue
-				}
+					// Shard file names are numeric shardIDs
+					shardID, err := strconv.ParseUint(sh, 10, 64)
+					if err != nil {
+						resC <- &res{err: fmt.Errorf("Skipping shard: %s. Not a valid path", rp)}
+						return
+					}
 
-				shard := NewShard(shardID, s.databaseIndexes[db], path, walPath, s.EngineOptions)
-				err = shard.Open()
-				if err != nil {
-					return fmt.Errorf("failed to open shard %d: %s", shardID, err)
-				}
+					shard := NewShard(shardID, index, path, walPath, s.EngineOptions)
 
-				s.shardLocations[shardID] = &shardLocation{Database: db, RetentionPolicy: rp.Name(), Shard: shard}
+					err = shard.Open()
+					if err != nil {
+						resC <- &res{err: fmt.Errorf("Failed to open shard: %d: %s", shardID, err)}
+						return
+					}
+
+					resC <- &res{s: &shardLocation{Database: db, RetentionPolicy: rp, Shard: shard}}
+					s.Logger.Printf("%s opened in %s", path, time.Now().Sub(start))
+				}(s.databaseIndexes[db], db, rp.Name(), sh.Name())
 			}
 		}
 	}
 
+	for i := 0; i < n; i++ {
+		res := <-resC
+		if res.err != nil {
+			s.Logger.Println(res.err)
+			continue
+		}
+		s.shardLocations[res.s.Shard.id] = res.s
+	}
+	close(resC)
 	return nil
 }
 
