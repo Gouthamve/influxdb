@@ -88,11 +88,11 @@ func (s *Series) UnmarshalBinary(buf []byte) error {
 
 // MeasurementFromSeriesKey returns the Measurement name for a given series.
 func MeasurementFromSeriesKey(key string) string {
-	idx := strings.Index(key, ",")
+	idx := strings.IndexByte(key, ',')
 	if idx == -1 {
 		return key
 	}
-	return key[:strings.Index(key, ",")]
+	return key[:idx]
 }
 
 // DecodeKeyValue decodes the key and value from bytes.
