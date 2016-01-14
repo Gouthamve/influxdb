@@ -988,7 +988,7 @@ func unescapeMeasurement(in []byte) []byte {
 
 func escapeTag(in []byte) []byte {
 	for b, esc := range tagEscapeCodes {
-		if bytes.Contains(in, []byte{b}) {
+		if bytes.IndexByte(in, b) != -1 {
 			in = bytes.Replace(in, []byte{b}, esc, -1)
 		}
 	}
@@ -997,7 +997,7 @@ func escapeTag(in []byte) []byte {
 
 func unescapeTag(in []byte) []byte {
 	for b, esc := range tagEscapeCodes {
-		if bytes.Contains(in, []byte{b}) {
+		if bytes.IndexByte(in, b) != -1 {
 			in = bytes.Replace(in, esc, []byte{b}, -1)
 		}
 	}
