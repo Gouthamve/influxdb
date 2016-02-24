@@ -407,7 +407,7 @@ def build(version=None,
         if "arm" in arch:
             if arch == "armel":
                 build_command += "GOARM=5 "
-            elif arch == "armhf":
+            elif arch == "armhf" or arch == "arm":
                 build_command += "GOARM=6 "
             elif arch == "arm64":
                 build_command += "GOARM=arm64 "
